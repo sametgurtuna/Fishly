@@ -24,7 +24,7 @@ public class GameManager : MonoBehaviour
     /// <summary>Fired whenever gold changes. Parameter = new total gold.</summary>
     public event Action<double> OnGoldChanged;
 
-    /// <summary>Fired whenever income per second changes.</summary>
+    /// <summary>Fired whenever income per hour changes.</summary>
     public event Action<double> OnIncomeChanged;
 
     /// <summary>Fired when a fish is successfully purchased. Param = FishData.</summary>
@@ -42,7 +42,7 @@ public class GameManager : MonoBehaviour
     [SerializeField, Tooltip("Current gold — read-only, do not edit")]
     private double _inspectorGold;
 
-    [SerializeField, Tooltip("Current income per second")]
+    [SerializeField, Tooltip("Current income per hour")]
     private double _inspectorIncome;
 
     [SerializeField, Tooltip("Fish count in scene")]
@@ -73,8 +73,11 @@ public class GameManager : MonoBehaviour
     private float incomeTimer;
     private float sceneScanTimer;
 
-    /// <summary>Total gold earned per second from all fish.</summary>
-    public double TotalIncomePerSecond { get; private set; }
+    /// <summary>Total gold earned per hour from all fish.</summary>
+    public double TotalIncomePerHour { get; private set; }
+
+    /// <summary>Compatibility accessor for systems that still need per-second value.</summary>
+    public double TotalIncomePerSecond => TotalIncomePerHour / 3600.0;
 
     /// <summary>Number of fish currently detected in the scene.</summary>
     public int SceneFishCount { get; private set; }
@@ -154,9 +157,9 @@ public class GameManager : MonoBehaviour
     private void Start()
     {
         LoadGame();
-        ScanSceneFish();        // detect fish already in the scene
         RecalculateIncome();
         CalculateOfflineEarnings();
+        ScanSceneFish();        // detect fish already in the scene
     }
 
     private void Update()
@@ -179,7 +182,7 @@ public class GameManager : MonoBehaviour
 
         // Sync inspector display fields
         _inspectorGold = _gold;
-        _inspectorIncome = TotalIncomePerSecond;
+        _inspectorIncome = TotalIncomePerHour;
         _inspectorFishCount = SceneFishCount;
     }
 
@@ -248,7 +251,7 @@ public class GameManager : MonoBehaviour
         Debug.Log($"[GameManager] Purchased {fish.fishName}! " +
                   $"Count: {ownedFish[fish]}, " +
                   $"Gold: {Gold:F0}, " +
-                  $"Income/s: {TotalIncomePerSecond:F1}");
+                  $"Income/h: {TotalIncomePerHour:F1}");
 
         // Auto-save after purchase
         SaveGame();
@@ -273,19 +276,40 @@ public class GameManager : MonoBehaviour
     public void ScanSceneFish()
     {
         FishAI[] allFish = FindObjectsOfType<FishAI>();
-        SceneFishCount = allFish.Length;
+        SceneFishCount = 0;
 
         // Rebuild scene-based counts
         Dictionary<FishData, int> sceneCounts = new Dictionary<FishData, int>();
 
         foreach (FishAI fish in allFish)
         {
+            if (fish == null || fish.fishData == null)
+                continue;
+
+            if (!fish.CanGenerateIncome)
+                continue;
+
+            SceneFishCount++;
+
             if (fish.fishData != null)
             {
                 if (!sceneCounts.ContainsKey(fish.fishData))
                     sceneCounts[fish.fishData] = 0;
                 sceneCounts[fish.fishData]++;
             }
+        }
+
+        // Reset existing counts first so removed fish types do not keep stale values.
+        List<FishData> keys = new List<FishData>(ownedFish.Keys);
+        for (int i = 0; i < keys.Count; i++)
+            ownedFish[keys[i]] = 0;
+
+        // Ensure catalog fish exist in dictionary even if zero.
+        for (int i = 0; i < fishCatalog.Count; i++)
+        {
+            FishData fish = fishCatalog[i];
+            if (fish != null && !ownedFish.ContainsKey(fish))
+                ownedFish[fish] = 0;
         }
 
         // Update ownedFish with scene counts
@@ -297,7 +321,7 @@ public class GameManager : MonoBehaviour
 
         RecalculateIncome();
 
-        Debug.Log($"[GameManager] Scene scan: {SceneFishCount} fish found, Income: {TotalIncomePerSecond:F1}/s");
+        Debug.Log($"[GameManager] Scene scan: {SceneFishCount} income fish found, Income: {TotalIncomePerHour:F1}/h");
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -305,12 +329,12 @@ public class GameManager : MonoBehaviour
     // ═══════════════════════════════════════════════════════════════
 
     /// <summary>
-    /// Recalculate total income per second from all owned fish.
+    /// Recalculate total income per hour from all owned fish.
     /// Call this whenever fish are purchased or multipliers change.
     /// </summary>
     public void RecalculateIncome()
     {
-        double totalIncome = 0;
+        double totalIncomePerHour = 0;
 
         foreach (var kvp in ownedFish)
         {
@@ -319,16 +343,16 @@ public class GameManager : MonoBehaviour
 
             if (fish != null && count > 0)
             {
-                totalIncome += fish.baseIncome * count;
+                totalIncomePerHour += fish.baseIncome * count;
             }
         }
 
-        TotalIncomePerSecond = totalIncome * globalIncomeMultiplier;
-        OnIncomeChanged?.Invoke(TotalIncomePerSecond);
+        TotalIncomePerHour = totalIncomePerHour * globalIncomeMultiplier;
+        OnIncomeChanged?.Invoke(TotalIncomePerHour);
     }
 
     /// <summary>
-    /// Get the income contribution of a specific fish type.
+    /// Get the hourly income contribution of a specific fish type.
     /// </summary>
     public double GetFishIncome(FishData fish)
     {
@@ -338,9 +362,9 @@ public class GameManager : MonoBehaviour
 
     private void EarnIncome()
     {
-        if (TotalIncomePerSecond <= 0) return;
+        if (TotalIncomePerHour <= 0) return;
 
-        double earned = TotalIncomePerSecond * incomeTickInterval;
+        double earned = (TotalIncomePerHour / 3600.0) * incomeTickInterval;
         Gold += earned;
         TotalGoldEarned += earned;
     }
@@ -363,6 +387,17 @@ public class GameManager : MonoBehaviour
         if (Gold < amount) return false;
         Gold -= amount;
         return true;
+    }
+
+    /// <summary>
+    /// Temporary debug helper: sets current gold to zero and saves immediately.
+    /// </summary>
+    [ContextMenu("Debug/Reset Gold To Zero")]
+    public void DebugResetGoldToZero()
+    {
+        Gold = 0;
+        SaveGame();
+        Debug.Log("[GameManager] Debug reset applied: Gold = 0");
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -390,7 +425,7 @@ public class GameManager : MonoBehaviour
             // Only count if at least 60 seconds have passed
             if (offlineSeconds >= 60)
             {
-                LastOfflineEarnings = TotalIncomePerSecond * offlineSeconds * offlineEarningRate;
+                LastOfflineEarnings = (TotalIncomePerHour / 3600.0) * offlineSeconds * offlineEarningRate;
                 Gold += LastOfflineEarnings;
                 TotalGoldEarned += LastOfflineEarnings;
 

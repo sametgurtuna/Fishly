@@ -16,5 +16,50 @@ MonoBehaviour:
   fishSprite: {fileID: 21300000, guid: ff26295ce31131543a0d8db6a10cdd04, type: 3}
   fishRarity: 0
   baseCost: 50
-  baseIncome: 1
+  baseIncome: 5
   priceMultiplier: 1.15
+  minSpeed: 0.5
+  maxSpeed: 2
+  speedSmoothTime: 1.2
+  wobbleFreqMin: 1.8
+  wobbleFreqMax: 7
+  wobbleAmplitude: 0.12
+  maxTiltAngle: 14
+  tiltSmooth: 7
+  flipSpeed: 8
+  curveStrength: 2
+  minIdleTime: 0.8
+  maxIdleTime: 3.5
+  restChance: 0.12
+  minRestTime: 2
+  maxRestTime: 6
+  canSurfaceFeed: 1
+  surfaceFeedChance: 0.08
+  surfaceY: 3.5
+  feedDuration: 1.6
+  enableSchooling: 1
+  separationRadius: 1.2
+  neighborRadius: 4
+  separationWeight: 1.5
+  alignmentWeight: 0.8
+  cohesionWeight: 0.5
+  enableCuriosity: 1
+  baseCuriosityChance: 0.14
+  curiosityStopDistance: 1.4
+  fleeRadius: 2.5
+  fleeSpeedMultiplier: 2.8
+  fleeDuration: 0.8
+  preferredDepth: 3
+  depthBias: 0.6
+  defaultBoldness: 0.5
+  defaultActivityLevel: 0.5
+  defaultSociability: 0.5
+  randomisePersonality: 1
+  sizeVariation: 0.18
+  canBreed: 1
+  eggPrefab: {fileID: 5898473646822857608, guid: 6d6a193d59ad5b14089dc12ebd8ef357, type: 3}
+  babyPrefab: {fileID: 610575568748539802, guid: 8f36be20722941e4a922a40a99ea0260, type: 3}
+  incubationHours: 0.1
+  growthMinutes: 30
+  babyScale: 0.55
+  eggScale: 0.3

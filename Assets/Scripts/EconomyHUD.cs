@@ -75,6 +75,7 @@ public class EconomyHUD : MonoBehaviour
     private double displayedGold;
     private double previousGold;
     private Tweener goldCountTween;
+    private float incomeRefreshTimer;
 
     // ═══════════════════════════════════════════════════════════════
     //  CONTEXT MENU — BUILD HUD (run once in Editor!)
@@ -133,7 +134,7 @@ public class EconomyHUD : MonoBehaviour
         incomePopupText = CreateTMPText("IncomeText", incomeRT, incomeFontSize,
             TextAlignmentOptions.MidlineRight, incomeColor);
         StretchToParent(incomePopupText.rectTransform, 5f, 0f);
-        incomePopupText.text = "+0/s";
+        incomePopupText.text = "+0/h";
 
         // ── FLOATING TEXT AREA ──────────────────────────────
         floatingTextArea = CreateRect("FloatingTextArea", canvasRT);
@@ -172,7 +173,7 @@ public class EconomyHUD : MonoBehaviour
             displayedGold = GameManager.Instance.Gold;
             previousGold = displayedGold;
             RefreshGoldText(displayedGold);
-            UpdateIncomeDisplay(GameManager.Instance.TotalIncomePerSecond);
+            UpdateIncomeDisplay(GameManager.Instance.TotalIncomePerHour);
 
             GameManager.Instance.OnGoldChanged += OnGoldChanged;
             GameManager.Instance.OnIncomeChanged += OnIncomeChanged;
@@ -181,6 +182,21 @@ public class EconomyHUD : MonoBehaviour
 
         if (playEntranceAnim)
             PlayEntranceAnimation();
+
+        // Normalize old scene text that may still contain "/s" from previous versions.
+        if (incomePopupText != null && incomePopupText.text.Contains("/s"))
+            incomePopupText.text = incomePopupText.text.Replace("/s", "/h");
+    }
+
+    private void Update()
+    {
+        // Keep HUD income in sync even if event order was missed on scene start.
+        incomeRefreshTimer += Time.unscaledDeltaTime;
+        if (incomeRefreshTimer < 0.5f) return;
+        incomeRefreshTimer = 0f;
+
+        if (GameManager.Instance != null)
+            UpdateIncomeDisplay(GameManager.Instance.TotalIncomePerHour);
     }
 
     private void OnDestroy()
@@ -369,18 +385,18 @@ public class EconomyHUD : MonoBehaviour
     //  INCOME DISPLAY
     // ═══════════════════════════════════════════════════════════════
 
-    private void UpdateIncomeDisplay(double incomePerSecond)
+    private void UpdateIncomeDisplay(double incomePerHour)
     {
         if (incomePopupText == null) return;
 
-        if (incomePerSecond <= 0)
+        if (incomePerHour <= 0)
         {
-            incomePopupText.text = "+0/s";
+            incomePopupText.text = "+0/h";
             incomePopupText.color = new Color(0.5f, 0.5f, 0.5f);
         }
         else
         {
-            incomePopupText.text = $"+{GameManager.FormatNumber(incomePerSecond)}/s";
+            incomePopupText.text = $"+{GameManager.FormatNumber(incomePerHour)}/h";
             incomePopupText.color = incomeColor;
 
             if (incomeRT != null)

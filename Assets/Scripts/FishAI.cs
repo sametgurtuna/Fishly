@@ -25,79 +25,30 @@ public class FishAI : MonoBehaviour
     public FishData fishData;
 
     // ═══════════════════════════════════════════════════════════════
-    //  PERSONALITY  (randomised once per instance in Start)
+    //  RUNTIME PERSONALITY (copied from FishData, then optionally randomized)
     // ═══════════════════════════════════════════════════════════════
-    [Header("Personality (auto-randomised)")]
-    [Tooltip("0 = very shy, 1 = very bold (affects flee/curiosity thresholds)")]
+    [Header("Runtime Personality")]
     [Range(0f, 1f)] public float boldness = 0.5f;
-    [Tooltip("0 = lazy/slow, 1 = always darting around")]
     [Range(0f, 1f)] public float activityLevel = 0.5f;
-    [Tooltip("0 = loner, 1 = loves company (affects schooling weight)")]
     [Range(0f, 1f)] public float sociability = 0.5f;
-    [Tooltip("Randomise personality on Start?")]
-    public bool randomisePersonality = true;
 
-    // ═══════════════════════════════════════════════════════════════
-    //  MOVEMENT
-    // ═══════════════════════════════════════════════════════════════
-    [Header("Movement")]
-    [Range(0.2f, 2f)]  public float minSpeed = 0.5f;
-    [Range(0.5f, 5f)]  public float maxSpeed = 2.0f;
-    [Tooltip("Larger = smoother but slower speed transitions")]
-    [Range(0.3f, 4f)]  public float speedSmoothTime = 1.2f;
+    // Runtime movement values. These are intentionally mutable
+    // (e.g. FishHunger slows fish by modifying these).
+    [HideInInspector] public float minSpeed = 0.5f;
+    [HideInInspector] public float maxSpeed = 2.0f;
 
     private float currentSpeed;
     private float targetSpeed;
     private float speedVelocity;   // SmoothDamp internal
 
-    // ═══════════════════════════════════════════════════════════════
-    //  IDLE / REST TIMING
-    // ═══════════════════════════════════════════════════════════════
-    [Header("Idle & Rest")]
-    public float minIdleTime   = 0.8f;
-    public float maxIdleTime   = 3.5f;
-    [Tooltip("How often the fish enters a longer rest (0–1)")]
-    [Range(0f, 0.5f)] public float restChance = 0.12f;
-    public float minRestTime   = 2.0f;
-    public float maxRestTime   = 6.0f;
-
     private float idleTimer;
-
-
-
-    // ═══════════════════════════════════════════════════════════════
-    //  TAIL WOBBLE  (speed-scaled, realistic)
-    // ═══════════════════════════════════════════════════════════════
-    [Header("Tail Wobble")]
-    [Tooltip("Wobble frequency at minimum speed")]
-    [Range(1f, 4f)] public float wobbleFreqMin = 1.8f;
-    [Tooltip("Wobble frequency at maximum speed")]
-    [Range(3f, 12f)] public float wobbleFreqMax = 7.0f;
-    [Tooltip("Wobble Y amplitude")]
-    [Range(0.01f, 0.4f)] public float wobbleAmplitude = 0.12f;
     private float wobblePhase;         // unique per instance
 
-    // ═══════════════════════════════════════════════════════════════
-    //  SMOOTH ROTATION
-    // ═══════════════════════════════════════════════════════════════
-    [Header("Rotation")]
-    [Range(0f, 30f)] public float maxTiltAngle = 14f;
-    [Range(1f, 20f)] public float tiltSmooth   = 7f;
     private float currentTilt;
 
-    // ═══════════════════════════════════════════════════════════════
-    //  SMOOTH FLIP
-    // ═══════════════════════════════════════════════════════════════
-    [Header("Flip")]
-    [Range(2f, 20f)] public float flipSpeed = 8f;
     private float targetScaleX;
     private float originalScaleX;
 
-    // ═══════════════════════════════════════════════════════════════
-    //  BEZIER PATH
-    // ═══════════════════════════════════════════════════════════════
-    [Header("Curved Path")]
-    [Range(0f, 5f)] public float curveStrength = 2.0f;
     private Vector2 bezierStart;
     private Vector2 bezierControl;
     private Vector2 bezierEnd;
@@ -111,64 +62,13 @@ public class FishAI : MonoBehaviour
     public Vector2 maxBounds   = new Vector2( 7.5f,  4f);
     [Range(0.2f, 2.5f)] public float edgePadding = 1.0f;
 
-    // ═══════════════════════════════════════════════════════════════
-    //  DEPTH PREFERENCE
-    // ═══════════════════════════════════════════════════════════════
-    public enum DepthLayer { Surface, Mid, Bottom, Any }
-
-    [Header("Depth Preference")]
-    public DepthLayer preferredDepth = DepthLayer.Any;
-    [Tooltip("How strongly the fish is pulled toward its preferred depth (0 = ignored)")]
-    [Range(0f, 1f)] public float depthBias = 0.6f;
-
-    // ═══════════════════════════════════════════════════════════════
-    //  SURFACE FEEDING
-    // ═══════════════════════════════════════════════════════════════
-    [Header("Surface Feeding")]
-    [Tooltip("Should this fish occasionally swim up to eat?")]
-    public bool canSurfaceFeed  = true;
-    [Range(0f, 0.3f)] public float surfaceFeedChance = 0.08f;
-    [Tooltip("Y position considered 'surface'")]
-    public float surfaceY        = 3.5f;
-    [Tooltip("How long the nibble animation plays")]
-    public float feedDuration    = 1.6f;
+    private FishDepthLayer runtimePreferredDepth = FishDepthLayer.Mid;
     private float feedTimer;
 
-    // ═══════════════════════════════════════════════════════════════
-    //  SCHOOLING (Boids)
-    // ═══════════════════════════════════════════════════════════════
-    [Header("Schooling (Boids)")]
-    public bool enableSchooling  = true;
-    [Range(0.5f, 3f)]  public float separationRadius    = 1.2f;
-    [Range(2f, 8f)]    public float neighborRadius       = 4.0f;
-    [Range(0f, 3f)]    public float separationWeight     = 1.5f;
-    [Range(0f, 2f)]    public float alignmentWeight      = 0.8f;
-    [Range(0f, 2f)]    public float cohesionWeight       = 0.5f;
+    [Header("Technical / Scene Settings")]
     [Tooltip("Layer mask for other fish — set to your Fish layer")]
     public LayerMask fishLayer;
-
-    // ═══════════════════════════════════════════════════════════════
-    //  CURIOSITY
-    // ═══════════════════════════════════════════════════════════════
-    [Header("Curiosity")]
-    public bool enableCuriosity        = true;
-    [Range(0f, 1f)] public float baseCuriosityChance = 0.14f;
-    [Range(0.5f, 3f)] public float curiosityStopDistance = 1.4f;
-
-    // ═══════════════════════════════════════════════════════════════
-    //  FLEE
-    // ═══════════════════════════════════════════════════════════════
-    [Header("Flee")]
-    [Range(0.5f, 6f)]  public float fleeRadius           = 2.5f;
-    [Range(1.5f, 5f)]  public float fleeSpeedMultiplier  = 2.8f;
-    [Range(0.3f, 2f)]  public float fleeDuration         = 0.8f;
     private float fleeTimer;
-
-    // ═══════════════════════════════════════════════════════════════
-    //  SIZE VARIATION
-    // ═══════════════════════════════════════════════════════════════
-    [Header("Individual Variation")]
-    [Range(0f, 0.35f)] public float sizeVariation = 0.18f;
 
     // ═══════════════════════════════════════════════════════════════
     //  STATE MACHINE
@@ -180,12 +80,53 @@ public class FishAI : MonoBehaviour
     //  INTERNALS
     // ═══════════════════════════════════════════════════════════════
     private SpriteRenderer  spriteRenderer;
+    private FishLifeStage   lifeStage;
+    private SpriteRenderer  selectionHaloRenderer;
     private Vector3         previousPosition;
     private Vector3         baseScale;               // before breathing
     private Vector2         schoolingVelocity;       // boids composite
 
     // Reusable overlap buffer (no per-frame allocations)
     private static readonly Collider2D[] _overlapBuffer = new Collider2D[24];
+
+    // FishData-backed config accessors
+    private float SpeedSmoothTime => fishData != null ? fishData.speedSmoothTime : 1.2f;
+    private float MinIdleTime => fishData != null ? fishData.minIdleTime : 0.8f;
+    private float MaxIdleTime => fishData != null ? fishData.maxIdleTime : 3.5f;
+    private float RestChance => fishData != null ? fishData.restChance : 0.12f;
+    private float MinRestTime => fishData != null ? fishData.minRestTime : 2.0f;
+    private float MaxRestTime => fishData != null ? fishData.maxRestTime : 6.0f;
+    private float WobbleFreqMin => fishData != null ? fishData.wobbleFreqMin : 1.8f;
+    private float WobbleFreqMax => fishData != null ? fishData.wobbleFreqMax : 7.0f;
+    private float WobbleAmplitude => fishData != null ? fishData.wobbleAmplitude : 0.12f;
+    private float MaxTiltAngle => fishData != null ? fishData.maxTiltAngle : 14f;
+    private float TiltSmooth => fishData != null ? fishData.tiltSmooth : 7f;
+    private float FlipSpeed => fishData != null ? fishData.flipSpeed : 8f;
+    private float CurveStrength => fishData != null ? fishData.curveStrength : 2.0f;
+    private bool CanSurfaceFeed => fishData != null ? fishData.canSurfaceFeed : true;
+    private float SurfaceFeedChance => fishData != null ? fishData.surfaceFeedChance : 0.08f;
+    private float SurfaceY => fishData != null ? fishData.surfaceY : 3.5f;
+    private float FeedDuration => fishData != null ? fishData.feedDuration : 1.6f;
+    private bool EnableSchooling => fishData != null ? fishData.enableSchooling : true;
+    private float SeparationRadius => fishData != null ? fishData.separationRadius : 1.2f;
+    private float NeighborRadius => fishData != null ? fishData.neighborRadius : 4.0f;
+    private float SeparationWeight => fishData != null ? fishData.separationWeight : 1.5f;
+    private float AlignmentWeight => fishData != null ? fishData.alignmentWeight : 0.8f;
+    private float CohesionWeight => fishData != null ? fishData.cohesionWeight : 0.5f;
+    private bool EnableCuriosity => fishData != null ? fishData.enableCuriosity : true;
+    private float BaseCuriosityChance => fishData != null ? fishData.baseCuriosityChance : 0.14f;
+    private float CuriosityStopDistance => fishData != null ? fishData.curiosityStopDistance : 1.4f;
+    private float FleeRadius => fishData != null ? fishData.fleeRadius : 2.5f;
+    private float FleeSpeedMultiplier => fishData != null ? fishData.fleeSpeedMultiplier : 2.8f;
+    private float FleeDuration => fishData != null ? fishData.fleeDuration : 0.8f;
+    private float DepthBias => fishData != null ? fishData.depthBias : 0.6f;
+    private float SizeVariation => fishData != null ? fishData.sizeVariation : 0.18f;
+
+    public bool IsEgg => lifeStage != null && lifeStage.IsEgg;
+    public bool IsBaby => lifeStage != null && lifeStage.IsBaby;
+    public bool IsAdult => lifeStage == null || lifeStage.CanBreed;
+    public bool CanBreed => fishData != null && fishData.canBreed && IsAdult;
+    public bool CanGenerateIncome => IsAdult;
 
     // ═══════════════════════════════════════════════════════════════
     //  LIFECYCLE
@@ -194,11 +135,23 @@ public class FishAI : MonoBehaviour
     void Start()
     {
         spriteRenderer = GetComponent<SpriteRenderer>();
+        lifeStage = GetComponent<FishLifeStage>();
 
-        if (fishData != null && fishData.fishSprite != null)
+        if (fishData != null && fishData.fishSprite != null && !IsEgg)
             spriteRenderer.sprite = fishData.fishSprite;
 
-        if (randomisePersonality)
+        // Copy base movement/personality from FishData, then randomize per-instance if enabled.
+        if (fishData != null)
+        {
+            minSpeed = fishData.minSpeed;
+            maxSpeed = fishData.maxSpeed;
+            boldness = fishData.defaultBoldness;
+            activityLevel = fishData.defaultActivityLevel;
+            sociability = fishData.defaultSociability;
+            runtimePreferredDepth = fishData.preferredDepth;
+        }
+
+        if (fishData != null && fishData.randomisePersonality)
         {
             boldness       = Random.value;
             activityLevel  = Random.value;
@@ -208,17 +161,20 @@ public class FishAI : MonoBehaviour
         // Unique wobble phase so fish don't oscillate in sync
         wobblePhase = Random.Range(0f, Mathf.PI * 2f);
 
-        // Size variation
-        float scaleMultiplier = 1f + Random.Range(-sizeVariation, sizeVariation);
-        transform.localScale *= scaleMultiplier;
+        // Size variation only applies to normal spawned fish, not eggs or baby growth states.
+        if (!IsBaby)
+        {
+            float scaleMultiplier = 1f + Random.Range(-SizeVariation, SizeVariation);
+            transform.localScale *= scaleMultiplier;
+        }
 
         baseScale      = transform.localScale;
         originalScaleX = Mathf.Abs(baseScale.x);
         targetScaleX   = originalScaleX;
 
         // Assign random depth preference if not set manually
-        if (preferredDepth == DepthLayer.Any)
-            preferredDepth = (DepthLayer)Random.Range(0, 3);
+        if (runtimePreferredDepth == FishDepthLayer.Any)
+            runtimePreferredDepth = (FishDepthLayer)Random.Range(0, 3);
 
         // Stagger start so fish don't all move at frame 0
         idleTimer = Random.Range(0f, 1.0f);
@@ -229,6 +185,9 @@ public class FishAI : MonoBehaviour
 
     void Update()
     {
+        if (IsEgg)
+            return;
+
         CheckFleeTrigger();
 
         switch (state)
@@ -288,7 +247,7 @@ public class FishAI : MonoBehaviour
 
     private void UpdateSwimming()
     {
-        currentSpeed = Mathf.SmoothDamp(currentSpeed, targetSpeed, ref speedVelocity, speedSmoothTime);
+        currentSpeed = Mathf.SmoothDamp(currentSpeed, targetSpeed, ref speedVelocity, SpeedSmoothTime);
 
         float dist        = Vector2.Distance(bezierStart, bezierEnd);
         float travelSpeed = dist > 0.01f ? currentSpeed / dist : 1f;
@@ -314,7 +273,7 @@ public class FishAI : MonoBehaviour
         Vector2 cohesion   = Vector2.zero;
         int     neighbors  = 0;
 
-        int count = Physics2D.OverlapCircleNonAlloc(transform.position, neighborRadius, _overlapBuffer, fishLayer);
+        int count = Physics2D.OverlapCircleNonAlloc(transform.position, NeighborRadius, _overlapBuffer, fishLayer);
 
         for (int i = 0; i < count; i++)
         {
@@ -325,7 +284,7 @@ public class FishAI : MonoBehaviour
             float   dist        = toNeighbor.magnitude;
 
             // Separation — push away from very close fish
-            if (dist < separationRadius && dist > 0.001f)
+            if (dist < SeparationRadius && dist > 0.001f)
                 separation -= toNeighbor.normalized / dist;
 
             // Alignment — match neighbour heading
@@ -341,14 +300,14 @@ public class FishAI : MonoBehaviour
 
         if (neighbors > 0)
         {
-            separation *= separationWeight;
-            alignment   = (alignment / neighbors).normalized * alignmentWeight;
-            cohesion    = ((cohesion / neighbors) - (Vector2)transform.position).normalized * cohesionWeight;
+            separation *= SeparationWeight;
+            alignment   = (alignment / neighbors).normalized * AlignmentWeight;
+            cohesion    = ((cohesion / neighbors) - (Vector2)transform.position).normalized * CohesionWeight;
             steer       = (separation + alignment + cohesion) * sociability;
         }
 
         // Blend schooling with current travel direction
-        currentSpeed = Mathf.SmoothDamp(currentSpeed, targetSpeed, ref speedVelocity, speedSmoothTime);
+        currentSpeed = Mathf.SmoothDamp(currentSpeed, targetSpeed, ref speedVelocity, SpeedSmoothTime);
 
         if (steer.sqrMagnitude > 0.001f)
             transform.position += (Vector3)steer.normalized * currentSpeed * Time.deltaTime;
@@ -371,13 +330,13 @@ public class FishAI : MonoBehaviour
         Vector3 mouseWorld = GetMouseWorldPosition();
         Vector2 toMouse    = (Vector2)mouseWorld - (Vector2)transform.position;
 
-        if (toMouse.magnitude < curiosityStopDistance)
+        if (toMouse.magnitude < CuriosityStopDistance)
         {
             EnterIdle();
             return;
         }
 
-        currentSpeed = Mathf.SmoothDamp(currentSpeed, targetSpeed * 0.65f, ref speedVelocity, speedSmoothTime);
+        currentSpeed = Mathf.SmoothDamp(currentSpeed, targetSpeed * 0.65f, ref speedVelocity, SpeedSmoothTime);
         transform.position += (Vector3)(toMouse.normalized * currentSpeed) * Time.deltaTime;
 
         UpdateFacingDirection();
@@ -390,7 +349,7 @@ public class FishAI : MonoBehaviour
 
     private void UpdateFeeding()
     {
-        Vector2 target     = new Vector2(transform.position.x, surfaceY);
+        Vector2 target     = new Vector2(transform.position.x, SurfaceY);
         Vector2 toSurface  = target - (Vector2)transform.position;
 
         if (toSurface.magnitude > 0.15f)
@@ -404,7 +363,7 @@ public class FishAI : MonoBehaviour
         {
             // Nibble animation — tiny up-down oscillation at surface
             float nibble = Mathf.Sin(Time.time * 8f) * 0.04f;
-            transform.position = new Vector3(transform.position.x, surfaceY + nibble, transform.position.z);
+            transform.position = new Vector3(transform.position.x, SurfaceY + nibble, transform.position.z);
             currentSpeed = Mathf.SmoothDamp(currentSpeed, 0f, ref speedVelocity, 0.4f);
         }
 
@@ -419,7 +378,7 @@ public class FishAI : MonoBehaviour
 
     private void UpdateFleeing()
     {
-        float burstTarget = targetSpeed * fleeSpeedMultiplier;
+        float burstTarget = targetSpeed * FleeSpeedMultiplier;
         currentSpeed = Mathf.SmoothDamp(currentSpeed, burstTarget, ref speedVelocity, 0.08f);
 
         float dist    = Mathf.Max(Vector2.Distance(bezierStart, bezierEnd), 0.1f);
@@ -442,12 +401,12 @@ public class FishAI : MonoBehaviour
     private void ChooseNextBehavior()
     {
         float rng = Random.value;
-        float curiosityChance = baseCuriosityChance * boldness;
+        float curiosityChance = BaseCuriosityChance * boldness;
 
         // 1. Surface feeding
-        if (canSurfaceFeed && rng < surfaceFeedChance)
+        if (CanSurfaceFeed && rng < SurfaceFeedChance)
         {
-            feedTimer    = feedDuration;
+            feedTimer    = FeedDuration;
             targetSpeed  = Random.Range(minSpeed, maxSpeed) * 0.6f;
             currentSpeed = Mathf.Max(currentSpeed, 0.05f);
             state        = FishState.Feeding;
@@ -455,16 +414,16 @@ public class FishAI : MonoBehaviour
         }
 
         // 2. Long rest (lazy fish more likely)
-        float adjustedRestChance = restChance + (1f - activityLevel) * 0.15f;
+        float adjustedRestChance = RestChance + (1f - activityLevel) * 0.15f;
         if (rng < adjustedRestChance)
         {
-            idleTimer = Random.Range(minRestTime, maxRestTime);
+            idleTimer = Random.Range(MinRestTime, MaxRestTime);
             state     = FishState.Resting;
             return;
         }
 
         // 3. Curiosity about cursor
-        if (enableCuriosity && rng < curiosityChance)
+        if (EnableCuriosity && rng < curiosityChance)
         {
             Vector3 mouse = GetMouseWorldPosition();
             if (IsInsideBounds(mouse))
@@ -477,9 +436,9 @@ public class FishAI : MonoBehaviour
         }
 
         // 4. Schooling with nearby fish
-        if (enableSchooling && sociability > 0.35f)
+        if (EnableSchooling && sociability > 0.35f)
         {
-            int neighborCount = Physics2D.OverlapCircleNonAlloc(transform.position, neighborRadius, _overlapBuffer, fishLayer);
+            int neighborCount = Physics2D.OverlapCircleNonAlloc(transform.position, NeighborRadius, _overlapBuffer, fishLayer);
             int validCount    = 0;
             for (int i = 0; i < neighborCount; i++)
                 if (_overlapBuffer[i] != null && _overlapBuffer[i].gameObject != gameObject) validCount++;
@@ -506,12 +465,14 @@ public class FishAI : MonoBehaviour
     {
         if (state == FishState.Fleeing) return;
         if (!Input.GetMouseButtonDown(0)) return;
+        if (FishSpawnManager.Instance != null && FishSpawnManager.Instance.IsBreedingSelectionMode) return;
+        if (IsEgg) return;
 
         Vector3 clickWorld = GetMouseWorldPosition();
         float   dist       = Vector2.Distance(clickWorld, transform.position);
 
         // Bold fish have a smaller effective flee radius
-        float adjustedRadius = fleeRadius * (1f - boldness * 0.4f);
+        float adjustedRadius = FleeRadius * (1f - boldness * 0.4f);
         if (dist > adjustedRadius) return;
 
         Vector2 fleeDir    = ((Vector2)transform.position - (Vector2)clickWorld).normalized;
@@ -524,9 +485,9 @@ public class FishAI : MonoBehaviour
         bezierControl = ClampPositionToBounds(mid + perp * Random.Range(-1.2f, 1.2f));
         bezierT       = 0f;
 
-        targetSpeed  = maxSpeed * fleeSpeedMultiplier;
+        targetSpeed  = maxSpeed * FleeSpeedMultiplier;
         currentSpeed = maxSpeed;
-        fleeTimer    = fleeDuration;
+        fleeTimer    = FleeDuration;
         state        = FishState.Fleeing;
     }
 
@@ -550,8 +511,8 @@ public class FishAI : MonoBehaviour
         depthMax = Mathf.Min(depthMax, padMaxY);
 
         // Lerp Y range between preferred and full range based on depthBias
-        float finalMinY = Mathf.Lerp(padMinY, depthMin, depthBias);
-        float finalMaxY = Mathf.Lerp(padMaxY, depthMax, depthBias);
+        float finalMinY = Mathf.Lerp(padMinY, depthMin, DepthBias);
+        float finalMaxY = Mathf.Lerp(padMaxY, depthMax, DepthBias);
 
         Vector2 target = new Vector2(
             Random.Range(padMinX, padMaxX),
@@ -562,7 +523,7 @@ public class FishAI : MonoBehaviour
         if (biasTowardNeighbors)
         {
             Vector2 centerOfMass = Vector2.zero;
-            int     count        = Physics2D.OverlapCircleNonAlloc(transform.position, neighborRadius, _overlapBuffer, fishLayer);
+            int     count        = Physics2D.OverlapCircleNonAlloc(transform.position, NeighborRadius, _overlapBuffer, fishLayer);
             int     valid        = 0;
             for (int i = 0; i < count; i++)
             {
@@ -581,7 +542,7 @@ public class FishAI : MonoBehaviour
         // Quadratic Bezier control point for organic arc
         Vector2 dir      = (bezierEnd - bezierStart).normalized;
         Vector2 perp     = Vector2.Perpendicular(dir);
-        float   offset   = Random.Range(-curveStrength, curveStrength);
+        float   offset   = Random.Range(-CurveStrength, CurveStrength);
         bezierControl    = ClampPositionToBounds((bezierStart + bezierEnd) * 0.5f + perp * offset);
 
         bezierT      = 0f;
@@ -601,10 +562,10 @@ public class FishAI : MonoBehaviour
         float speedFraction = (maxSpeed > minSpeed)
             ? Mathf.InverseLerp(minSpeed, maxSpeed, currentSpeed) : 0f;
 
-        float freq  = Mathf.Lerp(wobbleFreqMin, wobbleFreqMax, speedFraction);
+        float freq  = Mathf.Lerp(WobbleFreqMin, WobbleFreqMax, speedFraction);
         float scale = Mathf.Lerp(0.25f, 1f, speedFraction);   // less wobble when very slow
 
-        float wobbleY = Mathf.Sin(Time.time * freq + wobblePhase) * wobbleAmplitude * scale * Time.deltaTime;
+        float wobbleY = Mathf.Sin(Time.time * freq + wobblePhase) * WobbleAmplitude * scale * Time.deltaTime;
         transform.position += new Vector3(0f, wobbleY, 0f);
     }
 
@@ -624,7 +585,7 @@ public class FishAI : MonoBehaviour
     private void UpdateFlip()
     {
         Vector3 scale = transform.localScale;
-        scale.x = Mathf.Lerp(scale.x, targetScaleX, Time.deltaTime * flipSpeed);
+        scale.x = Mathf.Lerp(scale.x, targetScaleX, Time.deltaTime * FlipSpeed);
         transform.localScale = scale;
         baseScale = transform.localScale;   // keep baseScale in sync for breathing
     }
@@ -637,11 +598,44 @@ public class FishAI : MonoBehaviour
     {
         Vector3 delta = transform.position - previousPosition;
         float   desired = delta.sqrMagnitude > 0.00001f
-            ? Mathf.Clamp(-delta.y * 90f, -maxTiltAngle, maxTiltAngle)
+            ? Mathf.Clamp(-delta.y * 90f, -MaxTiltAngle, MaxTiltAngle)
             : 0f;
 
-        currentTilt = Mathf.Lerp(currentTilt, desired, Time.deltaTime * tiltSmooth);
+        currentTilt = Mathf.Lerp(currentTilt, desired, Time.deltaTime * TiltSmooth);
         transform.rotation = Quaternion.Euler(0f, 0f, currentTilt);
+    }
+
+    public void SetBreedingHighlight(bool active)
+    {
+        if (spriteRenderer == null)
+            spriteRenderer = GetComponent<SpriteRenderer>();
+
+        if (active)
+        {
+            if (selectionHaloRenderer == null)
+                CreateSelectionHalo();
+
+            if (selectionHaloRenderer != null)
+                selectionHaloRenderer.enabled = true;
+        }
+        else if (selectionHaloRenderer != null)
+        {
+            selectionHaloRenderer.enabled = false;
+        }
+    }
+
+    private void CreateSelectionHalo()
+    {
+        GameObject halo = new GameObject("BreedingHighlight");
+        halo.transform.SetParent(transform, false);
+        halo.transform.localPosition = Vector3.zero;
+        halo.transform.localScale = Vector3.one * 1.35f;
+
+        selectionHaloRenderer = halo.AddComponent<SpriteRenderer>();
+        selectionHaloRenderer.sprite = BreedingHaloFactory.Get();
+        selectionHaloRenderer.color = new Color(1f, 1f, 1f, 0.42f);
+        selectionHaloRenderer.sortingOrder = spriteRenderer != null ? spriteRenderer.sortingOrder - 1 : -1;
+        selectionHaloRenderer.enabled = false;
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -651,7 +645,7 @@ public class FishAI : MonoBehaviour
     private void EnterIdle()
     {
         state     = FishState.Idle;
-        idleTimer = Random.Range(minIdleTime, maxIdleTime);
+        idleTimer = Random.Range(MinIdleTime, MaxIdleTime);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -665,22 +659,62 @@ public class FishAI : MonoBehaviour
         return u * u * p0 + 2f * u * t * p1 + t * t * p2;
     }
 
+
+internal static class BreedingHaloFactory
+{
+    private static Sprite cached;
+
+    public static Sprite Get()
+    {
+        if (cached != null)
+            return cached;
+
+        const int size = 64;
+        Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        texture.filterMode = FilterMode.Bilinear;
+
+        Vector2 center = new Vector2(size * 0.5f, size * 0.5f);
+        float outerRadius = size * 0.5f - 1f;
+        float innerRadius = outerRadius * 0.62f;
+
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                float distance = Vector2.Distance(new Vector2(x, y), center);
+                if (distance > outerRadius || distance < innerRadius)
+                {
+                    texture.SetPixel(x, y, Color.clear);
+                    continue;
+                }
+
+                float t = Mathf.InverseLerp(innerRadius, outerRadius, distance);
+                texture.SetPixel(x, y, new Color(1f, 1f, 1f, 0.75f * (1f - t)));
+            }
+        }
+
+        texture.Apply();
+        cached = Sprite.Create(texture, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f), 100f);
+        cached.name = "BreedingHalo";
+        return cached;
+    }
+}
     private void GetDepthRange(out float yMin, out float yMax)
     {
         float height = maxBounds.y - minBounds.y;
         float bot    = minBounds.y;
 
-        switch (preferredDepth)
+        switch (runtimePreferredDepth)
         {
-            case DepthLayer.Surface:
+            case FishDepthLayer.Surface:
                 yMin = bot + height * 0.65f;
                 yMax = maxBounds.y;
                 break;
-            case DepthLayer.Bottom:
+            case FishDepthLayer.Bottom:
                 yMin = bot;
                 yMax = bot + height * 0.35f;
                 break;
-            case DepthLayer.Mid:
+            case FishDepthLayer.Mid:
                 yMin = bot + height * 0.25f;
                 yMax = bot + height * 0.75f;
                 break;
@@ -744,11 +778,11 @@ public class FishAI : MonoBehaviour
 
         // Flee radius
         Gizmos.color = new Color(1f, 0.2f, 0.2f, 0.25f);
-        Gizmos.DrawWireSphere(transform.position, fleeRadius * (1f - boldness * 0.4f));
+        Gizmos.DrawWireSphere(transform.position, FleeRadius * (1f - boldness * 0.4f));
 
         // Neighbor radius
         Gizmos.color = new Color(0.4f, 0.8f, 1f, 0.15f);
-        Gizmos.DrawWireSphere(transform.position, neighborRadius);
+        Gizmos.DrawWireSphere(transform.position, NeighborRadius);
 
         if (!Application.isPlaying) return;
 
